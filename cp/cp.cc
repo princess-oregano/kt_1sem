@@ -6,6 +6,9 @@
 #include "cp.h"
 
 static bool verbose = false;
+static bool interactive = false;
+static bool force = false;
+static bool preserve = false; 
 
 static ssize_t 
 my_write(int fd, const char *buffer, ssize_t buf_size)
@@ -59,6 +62,8 @@ option_switch(int opt)
                         verbose = true;
                         break;
                 case 'f':
+                        force = true;
+                        break;
                 case 'i':
                 case 'p':
                 case 'h':
@@ -87,13 +92,22 @@ parse(int argc, char *argv[])
 int
 cp(const char *src, const char *dest)
 {
-        int fd_in = open(src, O_RDONLY);
-        int fd_out = open(dest, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); 
+        assert(src);
+        assert(dest);
 
-        file_translator(fd_in, fd_out);
         if (verbose)
                 fprintf(stderr, "'%s' -> '%s'\n", src, dest);
 
-        return 0;
+        int fd_in = open(src, O_RDONLY);
+        int fd_out = open(dest, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); 
+
+        if ((fd_out == -1) && force) {
+                remove(dest);
+                fd_out = open(dest, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); 
+        }
+
+        int err = file_translator(fd_in, fd_out);
+
+        return err;
 }
 
