@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -9,6 +10,13 @@ static bool verbose = false;
 static bool interactive = false;
 static bool force = false;
 static bool preserve = false; 
+static bool help = false;
+
+static void
+print_help()
+{
+        printf("Usage: ./cp [OPTION]... SOURCE... DIRECTORY\n");
+}
 
 static ssize_t 
 my_write(int fd, const char *buffer, ssize_t buf_size)
@@ -64,9 +72,14 @@ option_switch(int opt)
                 case 'f':
                         force = true;
                         break;
+                case 'h':
+                        print_help();
+                        help = true; 
+                        // FIXME: exit is BAD.
+                        exit(0);
+                        break;
                 case 'i':
                 case 'p':
-                case 'h':
                 default: 
                         assert(0 && "The option in not implemented yet.");
         }
