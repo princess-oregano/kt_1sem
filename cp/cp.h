@@ -19,4 +19,7 @@ parse(int argc, char *argv[]);
 int
 cp(const char *src, const char *dest);
 
+void
+cleanup(int n, char *file[]);
+
 #endif // CP_H

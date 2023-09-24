@@ -6,9 +6,9 @@
 int
 main(int argc, char *argv[])
 {
-        // Parser module.
         parse(argc, argv);
 
+        cp(argv[optind], argv[optind + 1]);
 
         return 0;
 }

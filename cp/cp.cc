@@ -5,6 +5,8 @@
 #include <assert.h>
 #include "cp.h"
 
+static bool verbose = false;
+
 static ssize_t 
 my_write(int fd, const char *buffer, ssize_t buf_size)
 {
@@ -36,13 +38,13 @@ file_translator(int fd_in, int fd_out)
 
                 ssize_t nwrote = my_write(fd_out, buffer, nread);
                 if (nwrote < 0) {
-                        perror("my_cat: could not write");
+                        perror("file_translator: could not write");
                         return -1;
                 }
         }
 
         if (nread < 0) {
-                perror("my_cat: could not read");
+                perror("file_translator: could not read");
                 return -1;
         }
 
@@ -53,9 +55,11 @@ static void
 option_switch(int opt)
 {
         switch (opt) {
+                case 'v':
+                        verbose = true;
+                        break;
                 case 'f':
                 case 'i':
-                case 'v':
                 case 'p':
                 case 'h':
                 default: 
@@ -84,9 +88,11 @@ int
 cp(const char *src, const char *dest)
 {
         int fd_in = open(src, O_RDONLY);
-        int fd_out = open(dest, O_RDWR | O_CREAT);  
+        int fd_out = open(dest, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); 
 
         file_translator(fd_in, fd_out);
+        if (verbose)
+                fprintf(stderr, "'%s' -> '%s'\n", src, dest);
 
         return 0;
 }
