@@ -21,6 +21,8 @@ print_help()
 static ssize_t 
 my_write(int fd, const char *buffer, ssize_t buf_size)
 {
+        assert(buffer);
+
         ssize_t nwrote = 0;
         ssize_t n = 0;
 
@@ -50,13 +52,13 @@ file_translator(int fd_in, int fd_out)
                 ssize_t nwrote = my_write(fd_out, buffer, nread);
                 if (nwrote < 0) {
                         perror("file_translator: could not write");
-                        return -1;
+                        return 1;
                 }
         }
 
         if (nread < 0) {
                 perror("file_translator: could not read");
-                return -1;
+                return 1;
         }
 
         return 0;
@@ -79,10 +81,34 @@ option_switch(int opt)
                         exit(0);
                         break;
                 case 'i':
+                        interactive = true;
+                        break;
                 case 'p':
                 default: 
                         assert(0 && "The option in not implemented yet.");
         }
+}
+
+static bool
+overwrite(const char *file) 
+{
+        assert(file);
+
+        int fd_out = open(file, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+        if (fd_out == -1) {
+                printf("cp: overwrite '%s'? ", file);
+                if (getchar() == 'y')
+                        return true;
+
+                if (verbose)
+                        printf("skipped '%s'\n", file);
+
+                return false;
+        }       
+
+        close(fd_out);
+
+        return true;
 }
 
 int 
@@ -108,11 +134,15 @@ cp(const char *src, const char *dest)
         assert(src);
         assert(dest);
 
+        if (interactive) {
+                if(!overwrite(dest)) 
+                        return 1;
+        }
         if (verbose)
                 fprintf(stderr, "'%s' -> '%s'\n", src, dest);
 
         int fd_in = open(src, O_RDONLY);
-        int fd_out = open(dest, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); 
+        int fd_out = open(dest, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR); 
 
         if ((fd_out == -1) && force) {
                 remove(dest);

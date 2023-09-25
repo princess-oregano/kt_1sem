@@ -8,8 +8,6 @@ main(int argc, char *argv[])
 {
         parse(argc, argv);
 
-        cp(argv[optind], argv[optind + 1]);
-
-        return 0;
+        return cp(argv[optind], argv[optind + 1]);
 }
 
