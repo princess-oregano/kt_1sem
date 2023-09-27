@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include "cp.h"
 
 static bool verbose = false;
@@ -87,6 +88,8 @@ option_switch(int opt)
                         interactive = true;
                         break;
                 case 'p':
+                        preserve = true;
+                        break;
                 default: 
                         assert(0 && "The option in not implemented yet.");
         }
@@ -148,10 +151,24 @@ cp(const char *src, const char *dest)
                         return 1;
         }
         if (verbose)
-                fprintf(stderr, "'%s' -> '%s'\n", src, dest);
+                printf("'%s' -> '%s'\n", src, dest);
+
+        mode_t mode;
+        if (preserve) {
+                struct stat fs; 
+                int r = stat(src, &fs);
+                if (r == -1) {
+                        perror("cp(): ");
+                        exit(1);
+                }
+
+                mode = fs.st_mode;
+        } else {
+                mode = S_IRUSR | S_IWUSR;
+        }
 
         int fd_in = open(src, O_RDONLY);
-        int fd_out = open(dest, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR); 
+        int fd_out = open(dest, O_RDWR | O_CREAT | O_TRUNC, mode); 
 
         if ((fd_out == -1) && force) {
                 remove(dest);

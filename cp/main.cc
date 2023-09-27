@@ -19,7 +19,6 @@ main(int argc, char *argv[])
                         return cp(argv[optind], argv[optind + 1]);
                 } else {
                         char *new_name = name_wdir(argv[optind], argv[optind + 1]);
-                        fprintf(stderr, "%s\n", new_name);
                         cp(argv[optind], new_name);
                         free(new_name);
                 }
@@ -32,7 +31,6 @@ main(int argc, char *argv[])
 
                 for (int i = optind; i < argc - 1; i++) {
                         char *new_name = name_wdir(argv[i], argv[argc - 1]);
-                        fprintf(stderr, "%s\n", new_name);
                         cp(argv[i], new_name);
                         free(new_name);
                 }
