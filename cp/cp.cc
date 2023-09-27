@@ -1,9 +1,12 @@
+#include <cstdlib>
+#include <cstring>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <dirent.h>
 #include "cp.h"
 
 static bool verbose = false;
@@ -94,16 +97,22 @@ overwrite(const char *file)
 {
         assert(file);
 
+        bool ret_val = false;
         int fd_out = open(file, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
         if (fd_out == -1) {
                 printf("cp: overwrite '%s'? ", file);
+
+                char c;
+
                 if (getchar() == 'y')
-                        return true;
+                        ret_val = true;
+
+                while ((c = getchar()) != '\n' && c != EOF) ;
 
                 if (verbose)
                         printf("skipped '%s'\n", file);
 
-                return false;
+                return ret_val;
         }       
 
         close(fd_out);
@@ -151,6 +160,33 @@ cp(const char *src, const char *dest)
 
         int err = file_translator(fd_in, fd_out);
 
+        close(fd_in);
+        close(fd_out);
+
         return err;
 }
 
+bool
+check_dir(const char *dir)
+{
+        DIR* dir_ptr = opendir(dir);
+        if (dir_ptr) {
+            closedir(dir_ptr);
+            return true;
+        } else if (ENOENT == errno) {
+                return false;
+        } else {
+                perror("check_dir: ");
+                exit(1);
+        }
+}
+
+char *
+name_wdir(const char *file, const char *dir)
+{
+        char *new_name = (char *) calloc(strlen(file) + strlen(dir) + 1, sizeof(char));
+
+        sprintf(new_name, "%s/%s", dir, file);
+
+        return new_name;
+}
