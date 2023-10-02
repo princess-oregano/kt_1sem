@@ -14,7 +14,7 @@ main(int argc, char *argv[])
                 fprintf(stderr, "cp: missing destination file operand"
                                 "after '%s'\n", argv[optind]);
                 return 1;
-        } else if (n == 2) {            // File to file copy.
+        } else if (n == 2) {            // Single file copy.
                 if (!check_dir(argv[optind + 1])) {
                         return cp(argv[optind], argv[optind + 1]);
                 } else {

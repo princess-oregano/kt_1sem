@@ -26,3 +26,4 @@ bool
 check_dir(const char *dir);
 
 #endif // CP_H
+
