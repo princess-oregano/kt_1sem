@@ -19,8 +19,10 @@ main(int argc, char *argv[])
                         return cp(argv[optind], argv[optind + 1]);
                 } else {
                         char *new_name = name_wdir(argv[optind], argv[optind + 1]);
-                        cp(argv[optind], new_name);
+                        int ret = cp(argv[optind], new_name);
                         free(new_name);
+
+                        return ret;
                 }
         } else if (n > 2) {             // Files to dir copy.
                 if (!check_dir(argv[argc - 1])) {

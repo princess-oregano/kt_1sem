@@ -167,6 +167,11 @@ cp(const char *src, const char *dest)
         }
 
         int fd_in = open(src, O_RDONLY);
+        if (fd_in == -1) {
+                perror("cp(): ");
+                exit(1);
+        }
+
         int fd_out = open(dest, O_RDWR | O_CREAT | O_TRUNC, mode); 
 
         if ((fd_out == -1) && force) {
