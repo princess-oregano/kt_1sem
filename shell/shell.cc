@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/wait.h>
 #include "shell.h"
 
 static int
@@ -82,5 +84,51 @@ parser(char *cmd_line, size_t size, cmd_arr_t *cmd_arr)
         cmd_arr->size = cmd_count;
 
         return 0;
+}
+
+int
+run(cmd_arr_t *cmd_arr, int cmd_count)
+{       
+        cmd_t cmd = cmd_arr->ptr[cmd_count];
+
+        int fds[2];
+        pipe(fds);
+
+        if (fork() == 0) {
+                if (cmd_count < cmd_arr->size - 1) 
+                        close(fds[1]);
+
+                dup2(fds[0], 0);
+                // Recursion there.
+                if (cmd_count < cmd_arr->size - 1) {
+                        run(cmd_arr, cmd_count + 1);
+                }
+
+                exit(EXIT_SUCCESS);
+        } else {
+                if (cmd_count < cmd_arr->size - 1) {
+                        dup2(fds[1], 1);
+                        close(fds[0]);
+                }
+                execl("/bin/sh", "/bin/sh", "-c", cmd.arg, NULL);
+
+                wait(NULL);
+                exit(EXIT_SUCCESS);
+        }
+
+        return 0;
+}
+
+void
+cleanup(char *cmd_line, cmd_arr_t *cmd_arr)
+{
+        free(cmd_line);
+
+        for (int i = 0; i < cmd_arr->size; i++) {
+                free(cmd_arr->ptr[i].file);
+                free(cmd_arr->ptr[i].arg);
+        }
+
+        free(cmd_arr->ptr);
 }
 

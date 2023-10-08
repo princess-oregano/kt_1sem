@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "shell.h"
 
 static void
@@ -15,24 +16,19 @@ print_cmd(cmd_arr_t cmd_arr)
 int
 main()
 {
-        while (true) {
-                char *cmd_line = nullptr;
+        char *cmd_line = nullptr;
 
-                printf(" $ ");
-                size_t n = getline(&cmd_line, &n, stdin);
+        printf(" $ ");
+        size_t n = getline(&cmd_line, &n, stdin);
 
-                if (!strcmp(cmd_line, "quit\n")) {
-                        free(cmd_line);
-                        break;
-                }
+        cmd_arr_t cmd_arr;
+        parser(cmd_line, n, &cmd_arr);
 
-                cmd_arr_t cmd_arr;
-                parser(cmd_line, n, &cmd_arr);
+        cmd_t cmd = cmd_arr.ptr[0];
 
-                print_cmd(cmd_arr);
+        run(&cmd_arr, 0);
 
-                free(cmd_line);
-        }
+        cleanup(cmd_line, &cmd_arr);
         
         return 0;
 }
