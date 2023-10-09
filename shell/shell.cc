@@ -7,6 +7,28 @@
 #include "shell.h"
 
 static int
+argv_alloc(cmd_t *cmd, int cap)
+{
+        if (cap < 0) {
+                fprintf(stderr, "Capacity must be larger or equal to 0.\n");
+                return 1;
+        }
+
+        char *tmp = nullptr;
+        tmp = (char *) realloc((char *) cmd->argv, (size_t) cap * sizeof(char *));
+
+        if (tmp == nullptr) {
+                fprintf(stderr, "Couldn't allocate memory for tokens.\n");
+                return 1;
+        }
+
+        cmd->argv = (char **) tmp;
+        cmd->cap = cap;
+
+        return 0;
+}
+
+static int
 cmd_alloc(cmd_arr_t *cmd_arr, int cap)
 {
         if (cap < 0) {
@@ -20,6 +42,11 @@ cmd_alloc(cmd_arr_t *cmd_arr, int cap)
         if (tmp == nullptr) {
                 fprintf(stderr, "Couldn't allocate memory for tokens.\n");
                 return 1;
+        }
+
+        for (int i = cmd_arr->size; i < cap; i++) {
+                tmp[i].argv = nullptr;
+                tmp[i].argc = 0;
         }
 
         cmd_arr->ptr = tmp;
@@ -52,14 +79,29 @@ get_cmd(cmd_t *cmd, char *cmd_line)
 
         cmd_line--;
 
-        char *end_exec = strpbrk(cmd_line, BREAKSET);
-        get_word(&cmd->file, cmd_line, end_exec - cmd_line); 
-
         char *end_cmd = strpbrk(cmd_line, "|\n");
-        get_word(&cmd->arg, cmd_line, end_cmd - cmd_line); 
+        get_word(&cmd->line, cmd_line, end_cmd - cmd_line);
+
+        argv_alloc(cmd, 10);
+
+        // strtok usage here.
+        int argc = 0;
+        char *new_ptr = strtok(cmd->line, BREAKSET);
+        while (new_ptr) {
+                cmd->argv[argc++] = new_ptr;
+
+                if (cmd->cap < argc + 1) {
+                        argv_alloc(cmd, cmd->cap * 2);
+                }
+
+                new_ptr = strtok(NULL, BREAKSET);
+        }
+
+        cmd->argv[argc] = nullptr;
+
+        cmd->argc = argc;
 
         cmd_line = end_cmd + 1;
-
         if (*cmd_line == '\0') {
                 return nullptr;
         }
@@ -99,36 +141,35 @@ run(cmd_arr_t *cmd_arr, int cmd_count)
                         close(fds[1]);
 
                 dup2(fds[0], 0);
-                // Recursion there.
+
                 if (cmd_count < cmd_arr->size - 1) {
                         run(cmd_arr, cmd_count + 1);
                 }
 
-                exit(EXIT_SUCCESS);
+                return 0;
         } else {
                 if (cmd_count < cmd_arr->size - 1) {
                         dup2(fds[1], 1);
                         close(fds[0]);
                 }
-                execl("/bin/sh", "/bin/sh", "-c", cmd.arg, NULL);
+
+                execvp(cmd.argv[0], cmd.argv);
+                perror("");
 
                 wait(NULL);
-                exit(EXIT_SUCCESS);
         }
 
         return 0;
 }
 
-void
-cleanup(char *cmd_line, cmd_arr_t *cmd_arr)
+[[maybe_unused]] void
+cleanup(char *cmd_line, cmd_arr_t *cmd_arr) 
 {
-        free(cmd_line);
-
         for (int i = 0; i < cmd_arr->size; i++) {
-                free(cmd_arr->ptr[i].file);
-                free(cmd_arr->ptr[i].arg);
+                free(cmd_arr->ptr[i].argv);
+                free(cmd_arr->ptr[i].line);
         }
-
         free(cmd_arr->ptr);
+        free(cmd_line);
 }
 

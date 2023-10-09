@@ -5,11 +5,14 @@
 #include <unistd.h>
 #include "shell.h"
 
-static void
+[[maybe_unused]] static void
 print_cmd(cmd_arr_t cmd_arr) 
 {
         for (int i = 0; i < cmd_arr.size; i++) {
-                fprintf(stderr, "%s %s\n", cmd_arr.ptr[i].file, cmd_arr.ptr[i].arg);
+                for (int j = 0; j < cmd_arr.ptr[i].argc; j++) {
+                        fprintf(stderr, "'%s' ", cmd_arr.ptr[i].argv[j]);
+                }
+                fprintf(stderr, "\n");
         }
 }
 
@@ -23,13 +26,12 @@ main()
 
         cmd_arr_t cmd_arr;
         parser(cmd_line, n, &cmd_arr);
+        print_cmd(cmd_arr);
 
-        cmd_t cmd = cmd_arr.ptr[0];
-
-        run(&cmd_arr, 0);
+        //run(&cmd_arr, 0);
 
         cleanup(cmd_line, &cmd_arr);
-        
+
         return 0;
 }
 

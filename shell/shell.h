@@ -3,11 +3,13 @@
 
 #include <stdio.h>
 
-const char* const BREAKSET = " |\n\t\r\f\v\0";
+const char* const BREAKSET = " |\n\t\r\f\v";
 
 struct cmd_t {
-        char *file = nullptr;
-        char *arg  = nullptr; 
+        char *line = nullptr; 
+        char **argv = nullptr; 
+        int argc = 0;
+        int cap = 0;
 };
 
 struct cmd_arr_t {
