@@ -26,6 +26,7 @@ main()
 
         cmd_arr_t cmd_arr;
         parser(cmd_line, n, &cmd_arr);
+
         //print_cmd(cmd_arr);
 
         run(&cmd_arr, 0);

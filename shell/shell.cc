@@ -61,7 +61,7 @@ get_word(char **word, char *start, size_t n)
         char *tmp = (char *) calloc(n + 1, sizeof(char));
 
         if (tmp == nullptr) {
-                fprintf(stderr, "Error: Couldn't allocate memory for tokens.\n");
+                fprintf(stderr, "Error: Couldn't allocate memory for word.\n");
                 return 1;
         }
 
@@ -80,6 +80,12 @@ get_cmd(cmd_t *cmd, char *cmd_line)
         cmd_line--;
 
         char *end_cmd = strpbrk(cmd_line, "|\n");
+
+        //Empty line.
+        if (end_cmd == nullptr) {
+                exit(0);
+        }
+
         get_word(&cmd->line, cmd_line, end_cmd - cmd_line);
 
         argv_alloc(cmd, 10);
