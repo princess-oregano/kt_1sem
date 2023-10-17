@@ -22,7 +22,7 @@ int
 parser(char *cmd_line, size_t size, cmd_arr_t *cmd_arr);
 
 int
-run(cmd_arr_t *cmd_arr, int cmd_count);
+run(cmd_arr_t *cmd_arr);
 
 void
 cleanup(char *cmd_line, cmd_arr_t *cmd_arr);
