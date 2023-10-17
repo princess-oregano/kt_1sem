@@ -80,11 +80,12 @@ get_cmd(cmd_t *cmd, char *cmd_line)
                 return cmd_line;
         }
 
-        get_word(&cmd->line, cmd_line, end_cmd - cmd_line);
+        if (get_word(&cmd->line, cmd_line, end_cmd - cmd_line)) {
+                exit(1);
+        }
 
         argv_alloc(cmd, 10);
 
-        // strtok usage here.
         int argc = 0;
         char *new_ptr = strtok(cmd->line, BREAKSET);
         while (new_ptr) {
@@ -196,14 +197,23 @@ run(cmd_arr_t *cmd_arr)
                 cmd_t cmd = cmd_arr->ptr[i];
 
                 if (fork() == 0) {
-                        dup2(fds[i][0], STDIN_FILENO);
-                        dup2(fds[i][1], STDOUT_FILENO);
+                        if (dup2(fds[i][0], STDIN_FILENO) == -1) {
+                                perror("");
+                                pipe_dtor(fds, cmd_arr->size);
+                                return 1;
+                        }
+                        if (dup2(fds[i][1], STDOUT_FILENO) == -1) {
+                                perror("");
+                                pipe_dtor(fds, cmd_arr->size);
+                                return 1;
+                        }
 
                         pipe_dtor(fds, cmd_arr->size);
 
                         execvp(cmd.argv[0], cmd.argv);
 
-                        return 0;
+                        perror("");
+                        return 1;
                 }
         }
 

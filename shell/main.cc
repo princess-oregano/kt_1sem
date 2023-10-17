@@ -39,7 +39,10 @@ main()
 
                 //print_cmd(cmd_arr);
 
-                run(&cmd_arr);
+                if (run(&cmd_arr)) {
+                        cleanup(cmd_line, &cmd_arr);
+                        return 1;
+                }
 
                 cleanup(cmd_line, &cmd_arr);
         }
