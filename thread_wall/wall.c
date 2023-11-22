@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <errno.h>
 #include <pthread.h>
 #include <string.h>
 
@@ -38,9 +39,24 @@ mon_ctor(monitor_t *mon)
         mon->f_bricks = 0;
         mon->s_bricks = TILES_IN_ROW;
 
-        pthread_mutex_init(&mon->mutex, NULL);
-        pthread_cond_init(&mon->f_cond, NULL);
-        pthread_cond_init(&mon->s_cond, NULL);
+        int ret = 0; 
+
+        ret = pthread_mutex_init(&mon->mutex, NULL);
+        if (ret != 0)
+                return error(strerror(errno));
+
+        ret = pthread_cond_init(&mon->f_cond, NULL);
+        if (ret != 0) {
+                pthread_mutex_destroy(&mon->mutex);
+                return error(strerror(errno));
+        }
+
+        ret = pthread_cond_init(&mon->s_cond, NULL);
+        if (ret != 0) {
+                pthread_mutex_destroy(&mon->mutex);
+                pthread_cond_destroy(&mon->f_cond);
+                return error(strerror(errno));
+        }
 
         return 0;
 }
@@ -67,7 +83,7 @@ son(void *arg)
         fprintf(stderr, "Son started working.\n");
         ret = pthread_mutex_lock(&mon->mutex);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
                 return mon;
         }
 
@@ -75,7 +91,7 @@ son(void *arg)
                 if (mon->f_bricks < mon->s_bricks - TILES_IN_ROW + 1) {
                         ret = pthread_cond_wait(&mon->s_cond, &mon->mutex);
                         if (ret != 0) {
-                                error("%s", strerror(ret));
+                                error(strerror(ret));
                                 return mon;
                         }
                 }
@@ -85,7 +101,7 @@ son(void *arg)
 
                 ret = pthread_cond_signal(&mon->f_cond);
                 if (ret != 0) {
-                        error("%s", strerror(ret));
+                        error(strerror(ret));
                         return mon;
                 }
 
@@ -93,7 +109,7 @@ son(void *arg)
 
         ret = pthread_mutex_unlock(&mon->mutex);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
                 return mon;
         }
 
@@ -111,7 +127,7 @@ father(void *arg)
         fprintf(stderr, "Father started working.\n");
         ret = pthread_mutex_lock(&mon->mutex);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
                 return mon;
         }
 
@@ -119,7 +135,7 @@ father(void *arg)
                 if (mon->s_bricks < mon->f_bricks + 1) {
                         ret = pthread_cond_wait(&mon->f_cond, &mon->mutex);
                         if (ret != 0) {
-                                error("%s", strerror(ret));
+                                error(strerror(ret));
                                 return mon;
                         }
                 }
@@ -129,7 +145,7 @@ father(void *arg)
 
                 ret = pthread_cond_signal(&mon->s_cond);
                 if (ret != 0) {
-                        error("%s", strerror(ret));
+                        error(strerror(ret));
                         return mon;
                 }
 
@@ -137,7 +153,7 @@ father(void *arg)
         
         ret = pthread_mutex_unlock(&mon->mutex);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
                 return mon;
         }
 
@@ -149,25 +165,31 @@ father(void *arg)
 int
 main()
 {
+        int ret = 0;
+
         monitor_t mon = {0};
-        mon_ctor(&mon);
+        ret = mon_ctor(&mon);
+        if (ret != 0)
+                return ret;
 
         pthread_t f_thread = 0;
-        int ret = pthread_create(&f_thread, NULL, father, &mon);
+        ret = pthread_create(&f_thread, NULL, father, &mon);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
+                return 1;
         }
 
         pthread_t s_thread = 0;
         ret = pthread_create(&s_thread, NULL, son, &mon);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
+                return 1;
         }
 
         void *retval = NULL;
         ret = pthread_join(f_thread, &retval);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
                 return 1;
         }
         if (retval != NULL) {
@@ -177,7 +199,7 @@ main()
 
         ret = pthread_join(s_thread, &retval);
         if (ret != 0) {
-                error("%s", strerror(ret));
+                error(strerror(ret));
                 return 1;
         }
         if (retval != NULL) {

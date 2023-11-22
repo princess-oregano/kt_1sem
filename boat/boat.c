@@ -1,13 +1,14 @@
+#include <asm-generic/errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #include <unistd.h>
 #include <limits.h>
+#include <errno.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/sem.h>
-
-// TODO: write everything through 'array' of semid's
 
 enum SEM {
         SEM_IN,
@@ -22,81 +23,53 @@ union semun {
         struct seminfo *__buf;
 } arg;
 
-//! Color ANSI escape codes.
-const char DEFAULT_COLOR[] = "\x1b[0m";
-const char RED[]           = "\x1B[31m";
-const char GREEN[]         = "\x1b[32m";
-const char MAGENTA[]       = "\x1b[95m";
-const char CYAN[]          = "\x1B[36m";
-
-void print_wcolor(FILE *stream, const char *color, const char *format, ...)
+static int
+error(char* format, ...)
 {
-        va_list args = {};
+        fprintf(stderr, "boat: ");
 
-        fprintf(stream, "%s", color);
-
-        va_start(args, format);
-        vfprintf(stream, format, args);
-        va_end(args);
-
-        fprintf(stream, "%s", DEFAULT_COLOR);
-}
-
-static void
-event(char* format, ...)
-{
 	va_list args = {};
-
 	va_start(args, format);
-	print_wcolor(stderr, DEFAULT_COLOR, format, args);
+	vfprintf(stderr, format, args);
 	va_end(args);
-}
 
-static int
-sem_lock(int semid)
-{
-        struct sembuf op = {.sem_num = 0, .sem_op = -1};
-        return semop(semid, &op, 1);
-}
-
-static int
-sem_unlock(int semid)
-{
-        struct sembuf op = {.sem_num = 0, .sem_op = 1};
-        return semop(semid, &op, 1);
+	return 1;
 }
 
 int
 boat(int semid, long boat_cap, long pass_cap, long n_cycles)
 {
-        event("Boat moored to the shore!\n");
+        int ret = 0;
+
+        fprintf(stderr, "Boat moored to the shore!\n");
 
         for (int i = 0; i < n_cycles; i++) {
-                arg.val = 0;
-                semctl(semid, SEM_OUT, SETVAL, arg);
-
                 fprintf(stderr, "Boat is ready for passengers.\n");
                 // Open pass in.
-                arg.val = pass_cap;
-                semctl(semid, SEM_IN, SETVAL, arg);
+                ret = semctl(semid, SEM_IN, SETVAL, pass_cap);
+                if (ret == -1)
+                        return error(strerror(errno));
                 // Open boat.
-                arg.val = boat_cap;
-                semctl(semid, SEM_BOAT, SETVAL, arg);
+                ret = semctl(semid, SEM_BOAT, SETVAL, boat_cap);
+                if (ret == -1)
+                        return error(strerror(errno));
 
                 // Then passengers will begin to enter boat: 
                 // no more than pass_cap passengers will enter 
                 // pass, and no more than boat_cap will enter
                 // the boat. As soon as boat is full pass will be locked.
 
-                // Wait for passengers.
+                // Wait for passengers to enter the boat and free pass.
                 struct sembuf op[2] = {
                         {.sem_num = SEM_BOAT, .sem_op = 0},
-                        {.sem_num = SEM_IN, .sem_op = 0}
+                        {.sem_num = SEM_IN, .sem_op = -pass_cap}
                 };
-                semop(semid, op, 1);
+                ret = semop(semid, op, 2);
+                if (ret == -1)
+                        return error(strerror(errno));
 
-                arg.val = 0;
-                semctl(semid, SEM_IN, SETVAL, arg);
+                // Pass is locked due to semop.
+
                 fprintf(stderr, "Boat is full! Closing pass.\n");
 
                 fprintf(stderr, "Leaving.\n");
@@ -105,23 +78,29 @@ boat(int semid, long boat_cap, long pass_cap, long n_cycles)
                 fprintf(stderr, "Boat is at dock again. Passengers out.\n");
 
                 // Load pass cap.
-                arg.val = pass_cap;
-                semctl(semid, SEM_OUT, SETVAL, arg);
-                // Load boat cap.
-                arg.val = boat_cap;
-                semctl(semid, SEM_BOAT, SETVAL, arg);
+                ret = semctl(semid, SEM_OUT, SETVAL, pass_cap);
+                if (ret == -1)
+                        return error(strerror(errno));
 
-                // Wait for passengers to return from boat.
+                // Load boat cap.
+                ret = semctl(semid, SEM_BOAT, SETVAL, boat_cap);
+                if (ret == -1)
+                        return error(strerror(errno));
+
+                // Wait for passengers to return from boat and free pass.
                 struct sembuf op_2[2] = {
                         {.sem_num = SEM_BOAT, .sem_op = 0},
                         {.sem_num = SEM_OUT, .sem_op = -pass_cap},
                 };
-                semop(semid, op_2, 2);
+                ret = semop(semid, op_2, 2);
+                if (ret == -1)
+                        return error(strerror(errno));
         }
 
-        semctl(semid, SEM_IN, IPC_RMID);
-        semctl(semid, SEM_OUT, IPC_RMID);
-        semctl(semid, SEM_BOAT, IPC_RMID);
+        ret = semctl(semid, 0, IPC_RMID);
+        if (ret == -1)
+                return error(strerror(errno));
+
         fprintf(stderr, "Trip is over!\n");
 
         return 0;
@@ -130,43 +109,65 @@ boat(int semid, long boat_cap, long pass_cap, long n_cycles)
 int 
 passenger(int semid, const long n)
 {       
-        // Passenger enters pass and 
-        // buys a ticket(reserves place in the boat). 
-        struct sembuf op[2] = {
-                {.sem_num = SEM_IN, .sem_op = -1},
-                {.sem_num = SEM_BOAT, .sem_op = -1}
-        };
+        while (1) {
+                int retval = 0;
 
-        // Passenger enters boat and leaves pass.
-        semop(semid, op, 2);
-        fprintf(stderr, "#%ld entered pass.\n", n);
+                // Passenger enters pass and 
+                // buys a ticket(reserves place in the boat). 
+                struct sembuf in_boat_op[2] = {
+                        {.sem_num = SEM_IN, .sem_op = -1},
+                        {.sem_num = SEM_BOAT, .sem_op = -1}
+                };
 
-        // On boat, so not on pass.
-        struct sembuf pass_boat_op[2] = {
-                {.sem_num = SEM_IN,   .sem_op = 1},
-                {.sem_num = SEM_BOAT, .sem_op = -1}
-        };
-        semop(semid, pass_boat_op, 1);
-        fprintf(stderr, "#%ld entered boat.\n", n);
+                retval = semop(semid, in_boat_op, 2);
+                if (retval != 0) {
+                        if (errno == EIDRM)
+                                return 0;
+                        else 
+                                return error(strerror(errno));
+                }
 
-        // Wait for boat is full. When boat_semid is 
-        // locked until trip is over. 
-        struct sembuf op_wait = {.sem_num = SEM_BOAT, .sem_op = 0};
-        semop(semid, &op_wait, 1);
+                fprintf(stderr, "#%ld entered pass.\n", n);
 
-        // Off boat.
-        // Not on boat, so on pass.
-        struct sembuf in_boat[2] = {
-                {.sem_num = SEM_BOAT, .sem_op = -1},
-                {.sem_num = SEM_OUT, .sem_op = -1},
-        };
-        semop(semid, in_boat, 2);
-        fprintf(stderr, "#%ld leaving boat.\n", n);
+                // Passenger enters boat and leaves pass.
+                struct sembuf in_op = {.sem_num = SEM_IN, .sem_op = 1};
+                retval = semop(semid, &in_op, 1);
+                if (retval != 0) {
+                        if (errno == EIDRM)
+                                return 0;
+                        else 
+                                return error(strerror(errno));
+                }
 
-        struct sembuf op_2 = {.sem_num = SEM_OUT, .sem_op = 1};
-        semop(semid, &op_2, 1);
-        /*sem_unlock(out_semid);*/
-        fprintf(stderr, "#%ld leaving pass.\n", n);
+                fprintf(stderr, "#%ld entered boat.\n", n);
+
+                // Off boat.
+                // Not on boat, so on pass.
+                struct sembuf out_boat_op[2] = {
+                        {.sem_num = SEM_BOAT, .sem_op = -1},
+                        {.sem_num = SEM_OUT, .sem_op = -1},
+                };
+                retval = semop(semid, out_boat_op, 2);
+                if (retval != 0) {
+                        if (errno == EIDRM)
+                                return 0;
+                        else 
+                                return error(strerror(errno));
+                }
+
+                fprintf(stderr, "#%ld leaving boat.\n", n);
+
+                struct sembuf out_op = {.sem_num = SEM_OUT, .sem_op = 1};
+                retval = semop(semid, &out_op, 1);
+                if (retval != 0) {
+                        if (errno == EIDRM)
+                                return 0;
+                        else 
+                                return error(strerror(errno));
+                }
+
+                fprintf(stderr, "#%ld leaving pass.\n", n);
+        }
 
         return 0;
 }
@@ -179,12 +180,15 @@ main(int argc, char *argv[])
         long boat_cap     = atol(argv[3]);
         long n_cycles     = atol(argv[4]);
 
+        if (boat_cap > n_passengers)
+                return error("boat capacity > number of passengers");
+
         int semid = semget(IPC_PRIVATE, 3, IPC_CREAT | 0666);
+        if (semid == -1)
+                return error(strerror(errno));
 
         if (fork() == 0) {
-                int retval = boat(semid, boat_cap, pass_cap, n_cycles);
-
-                return retval;
+                return boat(semid, boat_cap, pass_cap, n_cycles);
         }
 
         for (long i = 1; i <= n_passengers; i++) {
@@ -198,9 +202,6 @@ main(int argc, char *argv[])
 
         wait(NULL);
 
-        semctl(semid, SEM_IN, IPC_RMID);
-        semctl(semid, SEM_OUT, IPC_RMID);
-        semctl(semid, SEM_BOAT, IPC_RMID);
-
         return 0;
 }
+

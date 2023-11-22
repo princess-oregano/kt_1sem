@@ -10,7 +10,7 @@
 #include "cp.h"
 
 static bool verbose = false;
-static bool interactive = false;
+static bool interactive = true;
 static bool force = false;
 static bool preserve = false; 
 static bool help = false;
@@ -94,14 +94,15 @@ option_switch(int opt)
         }
 }
 
+// TODO: return fd_out
 static bool
-overwrite(const char *file) 
+overwrite(const char *file, mode_t mode) 
 {
         assert(file);
 
         bool ret_val = false;
-        int fd_out = open(file, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-        if (fd_out == -1) {
+        int fd_out = open(file, O_WRONLY | O_CREAT | O_EXCL, mode);
+        if (errno == EEXIST) {
                 printf("cp: overwrite '%s'? ", file);
 
                 char c;
@@ -115,7 +116,10 @@ overwrite(const char *file)
                         printf("skipped '%s'\n", file);
 
                 return ret_val;
-        }       
+        } else {
+                perror("overwrite(): ");
+                exit(1);
+        }
 
         close(fd_out);
 
@@ -145,13 +149,6 @@ cp(const char *src, const char *dest)
         assert(src);
         assert(dest);
 
-        if (interactive) {
-                if(!overwrite(dest)) 
-                        return 1;
-        }
-        if (verbose)
-                printf("'%s' -> '%s'\n", src, dest);
-
         mode_t mode;
         if (preserve) {
                 struct stat fs; 
@@ -166,17 +163,38 @@ cp(const char *src, const char *dest)
                 mode = S_IRUSR | S_IWUSR;
         }
 
+        if (interactive) {
+                if(!overwrite(dest, mode)) 
+                        return 1;
+        }
+
+        if (verbose)
+                printf("'%s' -> '%s'\n", src, dest);
+
         int fd_in = open(src, O_RDONLY);
         if (fd_in == -1) {
                 perror("cp(): ");
                 exit(1);
         }
 
-        int fd_out = open(dest, O_RDWR | O_CREAT | O_TRUNC, mode); 
+        int fd_out = open(dest, O_WRONLY | O_CREAT | O_TRUNC, mode); 
 
-        if ((fd_out == -1) && force) {
-                remove(dest);
-                fd_out = open(dest, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); 
+        if ((errno != EEXIST) && force) {
+                if (errno == EACCES) {
+                        // TODO: add more interface.
+                        chmod(src, S_IWUSR | S_IRUSR);
+                }
+                if (remove(dest)) {
+                        perror("cp(): ");
+                        exit(1);
+                }
+
+                fd_out = open(dest, O_WRONLY | O_CREAT | O_TRUNC, mode); 
+        }
+
+        if (fd_out == -1) {
+                perror("cp(): ");
+                exit(1);
         }
 
         int err = file_translator(fd_in, fd_out);
